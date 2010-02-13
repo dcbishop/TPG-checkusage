@@ -3,9 +3,9 @@
 import time
 import calendar
 
-onpeak = 60
-offpeak = 140
-rollover_day = 19
+onpeak = 80
+offpeak = 80
+rollover_day = 12
 
 now = time.localtime()
 year = now[0]
