@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 from __future__ import division
 from __future__ import print_function
 
@@ -28,23 +27,34 @@ def getCurrentUsage():
 
     data = urllib.urlencode(values)
     request = urllib2.Request(url, data)
-    response = urllib2.urlopen(request)
+    
+    try:
+        response = urllib2.urlopen(request)
+    except:
+        print("ERROR: Could not retrieve TPG website...");
+        raise
 
     cookies = CookieJar()
     cookies.extract_cookies(response, request)
     cookie_handler = urllib2.HTTPCookieProcessor(cookies)
     redirect_handler = urllib2.HTTPRedirectHandler()
     opener = urllib2.build_opener(redirect_handler,cookie_handler)
-    response = opener.open(request)
+
+    try:
+        response = opener.open(request)
+    except:
+        print("ERROR: Could not retrieve account usage website...");
+        raise
 
     the_page = response.read()
 
     found = re.search('(<BR>Peak\ Downloads\ used:\ )(.+)( MB<br>Off-Peak Downloads used: )(.+)( MB</td>)', the_page)
 
     if not found:
-        print("ERROR: Could not find quota information.");
+        print("ERROR: Could not find quota information in returned site. Check login details.");
+        #print(the_page)
+        raise
 
-    #print(the_page)
     onpeak_used = found.group(2)
     offpeak_used = found.group(4)
 
@@ -73,7 +83,11 @@ def getCurrentTarget():
 
 def printUsage():
     target_onpeak, target_offpeak, days_until_rollover, days_since_rollover = getCurrentTarget()
-    onpeak_used, offpeak_used = getCurrentUsage()
+    
+    try:
+        onpeak_used, offpeak_used = getCurrentUsage()
+    except:
+        return
 
     print("Peak: %1f / %f, (%f MB)" % (onpeak_used, max_onpeak, target_onpeak))
     print("Offpeak: %f / %f, (%f MB)" % (offpeak_used, max_offpeak, target_offpeak))
