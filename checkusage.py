@@ -10,16 +10,31 @@ import urllib
 import urllib2
 from cookielib import CookieJar
 
+# You need to set the folloing values values
 username = "yourusername"
 password = "yourpassword"
 
-max_onpeak = 80000.0
-max_offpeak = 80000.0
-rollover_day = 12
+# In MB (1G = 1000.0), sample values are for the "ADSL2+ Super Fast / 500GB" one
+max_onpeak = 150000.0 
+max_offpeak = 350000.0
+
+# What the final day of the month for your plan
+rollover_day = 17
+
+# [TODO]: Username/Password should probably be stored in a seperate config file to ensure
+# people passing the file around don't pass their password too, maybe some basic
+# encryption (rot13?).
+
+# ['TODO'] Extract rollover from the usage page. This might be the day befoure
+# the date listed on the usage page as 'Expiry Date'.
+
+# [TODO]: Maybe work out peak quotas from the plan information on the page
+# (although there are people still on older plans that don't list the data on
+# the website so I don't have data, but in those cases people should be
+# encouraged to change to a newer plan since they are generally cheaper or offer
+# more data, otherise manual override).
 
 def getCurrentUsage():
-
-
     url = "https://cyberstore.tpg.com.au/your_account/index.php?function=checkaccountusage"
 
     data = {}
@@ -27,7 +42,7 @@ def getCurrentUsage():
 
     data = urllib.urlencode(values)
     request = urllib2.Request(url, data)
-    
+
     try:
         response = urllib2.urlopen(request)
     except:
@@ -48,17 +63,28 @@ def getCurrentUsage():
 
     the_page = response.read()
 
+
+    # For accounts that count upload and download
+    found = re.search('(<BR>Peak\ Downloads\ used:\ )(.+)( MBPeak\ Uploads\ used:\ )(.+)( MBPeak Total used: )(.+)( MB<br>Off-Peak Downloads used: )(.+)( MB<br>Off-Peak Uploads used: )(.+)( MBOff-Peak Total used: )(.+)( MB</td>)', the_page)
+    if found:
+        onpeak_downloads_used = found.group(2)
+        onpeak_uploads_used = found.group(4)
+        onpeak_used = found.group(6)
+        offpeak_downloads_used = found.group(8)
+        offpeak_uploads_used = found.group(10)
+        offpeak_used = found.group(12)
+        return float(onpeak_used), float(offpeak_used)
+
+    # For accounts that only count download
     found = re.search('(<BR>Peak\ Downloads\ used:\ )(.+)( MB<br>Off-Peak Downloads used: )(.+)( MB</td>)', the_page)
+    if found:
+        onpeak_used = found.group(2)
+        offpeak_used = found.group(4)
+        return float(onpeak_used), float(offpeak_used)
 
-    if not found:
-        print("ERROR: Could not find quota information in returned site. Check login details.");
-        #print(the_page)
-        raise
-
-    onpeak_used = found.group(2)
-    offpeak_used = found.group(4)
-
-    return float(onpeak_used), float(offpeak_used)
+    print("ERROR: Could not find quota information in returned site. Check login details.");
+    #print(the_page)
+    raise
 
 def getCurrentTarget():
     now = time.localtime()
@@ -87,6 +113,7 @@ def printUsage():
     try:
         onpeak_used, offpeak_used = getCurrentUsage()
     except:
+        print("Could not get usage data...")
         return
 
     print("Peak: %1f / %f, (%f MB)" % (onpeak_used, max_onpeak, target_onpeak))
