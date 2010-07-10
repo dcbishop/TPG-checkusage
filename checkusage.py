@@ -118,6 +118,8 @@ def printUsage():
         print("Saving settings to '" + config_filename + "'");
         output = open(config_filename, 'wb')
         pickle.dump(settings, output)
+        output.close()
+        os.chmod(config_filename, 0600)
         print("Getting usage...")
 
     target_onpeak, target_offpeak, days_until_rollover, days_since_rollover = getCurrentTarget(settings)    
