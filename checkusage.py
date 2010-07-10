@@ -5,27 +5,15 @@ from __future__ import print_function
 import time
 import calendar
 import re
-
 import urllib
 import urllib2
 from cookielib import CookieJar
+import pickle
+import os
 
-# You need to set the folloing values values
-username = "yourusername"
-password = "yourpassword"
+# [TODO]: Stored Username/Password could do with some simple encryption.
 
-# In MB (1G = 1000.0), sample values are for the "ADSL2+ Super Fast / 500GB" one
-max_onpeak = 150000.0 
-max_offpeak = 350000.0
-
-# What the final day of the month for your plan
-rollover_day = 17
-
-# [TODO]: Username/Password should probably be stored in a seperate config file to ensure
-# people passing the file around don't pass their password too, maybe some basic
-# encryption (rot13?).
-
-# ['TODO'] Extract rollover from the usage page. This might be the day befoure
+# [TODO] Extract rollover from the usage page. This might be the day befoure
 # the date listed on the usage page as 'Expiry Date'.
 
 # [TODO]: Maybe work out peak quotas from the plan information on the page
@@ -34,7 +22,10 @@ rollover_day = 17
 # encouraged to change to a newer plan since they are generally cheaper or offer
 # more data, otherise manual override).
 
-def getCurrentUsage():
+homedir = os.path.expanduser('~')
+config_filename = homedir + '/.config/tpg-usage.cfg'
+
+def getCurrentUsage(username, password):
     url = "https://cyberstore.tpg.com.au/your_account/index.php?function=checkaccountusage"
 
     data = {}
@@ -86,7 +77,7 @@ def getCurrentUsage():
     #print(the_page)
     raise
 
-def getCurrentTarget():
+def getCurrentTarget(settings):
     now = time.localtime()
     year = now[0]
     month = now[1]
@@ -94,30 +85,50 @@ def getCurrentTarget():
 
     days_in_month = calendar.monthrange(year, month)[1] 
 
-    days_until_rollover = rollover_day-day
+    days_until_rollover = settings['rollover_day']-day
     days_since_rollover = days_in_month-days_until_rollover
 
     if days_until_rollover < 0:
-        days_since_rollover = day-rollover_day
+        days_since_rollover = day-settings['rollover_day']
         days_until_rollover = days_in_month - days_since_rollover
 
-    target_onpeak = (float(max_onpeak) / days_in_month) * days_since_rollover
-    target_offpeak = (float(max_offpeak) / days_in_month) * days_since_rollover
+    target_onpeak = (float(settings['max_onpeak']) / days_in_month) * days_since_rollover
+    target_offpeak = (float(settings['max_offpeak']) / days_in_month) * days_since_rollover
 
     return target_onpeak, target_offpeak, days_until_rollover, days_since_rollover
 
 
 def printUsage():
-    target_onpeak, target_offpeak, days_until_rollover, days_since_rollover = getCurrentTarget()
-    
+    settings = None
+    try:    
+        f = open(config_filename, 'rb')
+        settings = pickle.load(f)
+    except:
+        print("Could not load settings '" + config_filename + "'")
+
+    if not settings:
+        print("Configuration:")
+        username = raw_input("Enter your username: ")
+        password = raw_input("Enter your password: ")
+        print("Quotas are entered in MB, ie 150GB = 150000.")
+        max_onpeak = float(raw_input("Enter your maximum onpeak quota: "))
+        max_offpeak = float(raw_input("Enter your maximum offpeak quota: "))
+        rollover_day = int(raw_input("Enter the roll over day (final day of the month for your plan): "))
+        settings = {'username':username, 'password':password, 'max_onpeak':max_onpeak, 'max_offpeak':max_offpeak, 'rollover_day':rollover_day}
+        print("Saving settings to '" + config_filename + "'");
+        output = open(config_filename, 'wb')
+        pickle.dump(settings, output)
+        print("Getting usage...")
+
+    target_onpeak, target_offpeak, days_until_rollover, days_since_rollover = getCurrentTarget(settings)    
     try:
-        onpeak_used, offpeak_used = getCurrentUsage()
+        onpeak_used, offpeak_used = getCurrentUsage(settings['username'], settings['password'])
     except:
         print("Could not get usage data...")
         return
 
-    print("Peak: %1f / %f, (%f MB)" % (onpeak_used, max_onpeak, target_onpeak))
-    print("Offpeak: %f / %f, (%f MB)" % (offpeak_used, max_offpeak, target_offpeak))
+    print("Peak: %1f / %f, (%f MB)" % (onpeak_used, settings['max_onpeak'], target_onpeak))
+    print("Offpeak: %f / %f, (%f MB)" % (offpeak_used, settings['max_offpeak'], target_offpeak))
     print("Days untill rollover:", days_until_rollover, ", Days since rollover:", days_since_rollover)
 
 if __name__ == '__main__':
